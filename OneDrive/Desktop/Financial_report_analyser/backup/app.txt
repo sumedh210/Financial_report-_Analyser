@@ -1,0 +1,81 @@
+import streamlit as st
+from services.hyde_generator import HydeGenerator
+from services.retriever import Retriever
+from groq import Groq
+from config import MODEL_KEY
+
+# --- Configuration ---
+COLLECTION_NAME = "financial_reports"
+st.set_page_config(page_title="Financial Report Analyzer", page_icon="📈")
+
+# --- Initialize Service Classes ---
+# We use st.cache_resource to initialize these classes only once, 
+# which makes the app much faster.
+@st.cache_resource
+def get_services():
+    print("Initializing services...")
+    hyde = HydeGenerator(model="llama3-8b-8192")
+    retriever = Retriever(top_k=5)
+    groq_client = Groq(api_key=MODEL_KEY)
+    return hyde, retriever, groq_client
+
+hyde_generator, retriever, groq_client = get_services()
+
+# --- Main Application Logic ---
+st.title(" Advanced Financial Report Analyzer")
+st.write("Ask a question about your financial documents, and the AI will find the answer using an advanced RAG pipeline (HyDE + Reranker).")
+
+# Input text box for the user's query
+query = st.text_input("Ask your question:", placeholder="e.g., What was the total revenue last quarter?")
+
+if query:
+    st.write("---")
+    
+    # 1. Generate Hypothetical Document (HyDE)
+    with st.spinner("Step 1/4: Generating hypothetical answer (HyDE)..."):
+        hypothetical_doc = hyde_generator.generate_hypothetical_answer(query)
+    st.info("🔹 **Hypothetical Answer (for search):**")
+    st.write(hypothetical_doc)
+
+    # 2. Retrieve and Rerank Documents
+    with st.spinner("Step 2/4: Retrieving and reranking relevant documents..."):
+        # We use the hypothetical document to perform the search
+        retrieved_docs = retriever.retrieve(hypothetical_doc, COLLECTION_NAME)
+
+    # 3. Generate Final Answer
+    if retrieved_docs:
+        # Prepare context for the final LLM
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        
+        final_prompt = (
+            "You are a financial analyst assistant. Answer the user's question based only on the following context.\n"
+            "If the answer is not in the context, state that you cannot find the answer in the provided documents.\n\n"
+            "--- CONTEXT ---\n"
+            f"{context}\n\n"
+            "--- QUESTION ---\n"
+            f"{query}\n\n"
+            "--- ANSWER ---"
+        )
+        
+        with st.spinner("Step 3/4: Generating final answer..."):
+            response = groq_client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[{"role": "user", "content": final_prompt}],
+                temperature=0.1
+            )
+            final_answer = response.choices[0].message.content
+
+        # 4. Display the results
+        with st.spinner("Step 4/4: Finalizing response..."):
+            st.success(" **Final Answer:**")
+            st.write(final_answer)
+
+            # Display the sources used for the answer
+            with st.expander(" Show Sources"):
+                for i, doc in enumerate(retrieved_docs):
+                    st.write(f"**Source {i+1}:**")
+                    st.write(doc.page_content)
+                    st.write("---")
+
+    else:
+        st.error("Could not retrieve any relevant documents from the database. Please try another query or check if documents have been ingested.")

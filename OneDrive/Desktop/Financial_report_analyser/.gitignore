@@ -1,0 +1,8 @@
+# Virtual Environment
+.venv/
+
+# Local Database
+chroma_db_finance/
+
+# API Keys
+.env
