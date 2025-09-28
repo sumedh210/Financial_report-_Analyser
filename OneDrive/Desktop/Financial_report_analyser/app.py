@@ -2,20 +2,20 @@ import streamlit as st
 import os
 from services.document_processor import DocumentProcessor
 from services.hyde_generator import HydeGenerator
-from services.retriever import Retriever
+from services.retriever import Retriever    
 from groq import Groq
 from config import MODEL_KEY
 
 # --- Configuration ---
 COLLECTION_NAME = "financial_reports"
-PDF_SOURCE_FOLDER = "data/reports"
+PDF_SOURCE_FOLDER = "C:\\Users\\sumed\\OneDrive\\Desktop\\Financial_report_analyser\\data"
 st.set_page_config(page_title="Financial Report Analyzer", page_icon="📈")
 
 # --- Initialize Service Classes ---
 @st.cache_resource
 def get_services():
     print("Initializing services...")
-    hyde = HydeGenerator(model="llama3-8b-8192")
+    hyde = HydeGenerator(model="llama-3.1-8b-instant")
     retriever = Retriever(top_k=5)
     groq_client = Groq(api_key=MODEL_KEY)
     processor = DocumentProcessor()
@@ -75,7 +75,7 @@ if query:
         
         with st.spinner("Step 3/4: Generating final answer..."):
             response = groq_client.chat.completions.create(
-                model="llama3-8b-8192",
+                model="llama-3.1-8b-instant",
                 messages=[{"role": "user", "content": final_prompt}],
                 temperature=0.1
             )
